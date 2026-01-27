@@ -100,7 +100,7 @@ export function HabitLogScreen() {
   const [logs, setLogs] = useState([]);
   const dayTimeline = useMemo(() => buildLast30Days(), []);
   const [selectedDate, setSelectedDate] = useState(() => dayTimeline[dayTimeline.length - 1].key);
-  const [currentCalories, setCurrentCalories] = useState(1450);
+  const [currentCalories, setCurrentCalories] = useState('');
   const [showNutritionModal, setShowNutritionModal] = useState(false);
   const [foodName, setFoodName] = useState('');
   const [foodWeight, setFoodWeight] = useState('');

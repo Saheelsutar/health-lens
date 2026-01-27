@@ -10,6 +10,7 @@ import { CommunityScreen } from '../screens/CommunityScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SymptomCheckerScreen } from '../screens/SymptomCheckerScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import StepCounter from '../screens/StepCounter';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { useAuth } from '../context/AuthContext';
 
@@ -101,6 +102,14 @@ function Tabs() {
         options={{
           title: 'Tracking',
           tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="Steps"
+        component={StepCounter}
+        options={{
+          title: 'Steps',
+          tabBarIcon: ({ color, size }) => <Ionicons name="walk-outline" color={color} size={size} />,
         }}
       />
 
