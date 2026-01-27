@@ -39,7 +39,7 @@ export function SymptomCheckerScreen() {
     setResult(null);
 
     try {
-      const response = await fetch('http://localhost:3000/api/symptom-check', {
+      const response = await fetch('https://health-backend-az5j.onrender.com/api/symptom-check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

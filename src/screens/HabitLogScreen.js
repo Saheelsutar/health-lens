@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card, IconCircle, ProgressBar } from '../components/ui';
@@ -21,7 +21,7 @@ function DayPill({ day, date, active }) {
   );
 }
 
-function GoalCard({ title, target, currentLabel, progress, accent, iconName, iconBg }) {
+function GoalCard({ title, target, currentLabel, progress, accent, iconName, iconBg, onAddPress, isTimer, timerActive }) {
   const { colors } = useTheme();
   return (
     <Card style={{ marginTop: 14 }}>
@@ -36,9 +36,13 @@ function GoalCard({ title, target, currentLabel, progress, accent, iconName, ico
           </View>
         </View>
 
-        <View style={[styles.plusPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
-          <Ionicons name="add" size={18} color={colors.text} />
-        </View>
+        <Pressable onPress={onAddPress} style={[styles.plusPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          {isTimer && timerActive ? (
+            <Ionicons name="pause" size={18} color={colors.text} />
+          ) : (
+            <Ionicons name={isTimer ? 'play' : 'add'} size={18} color={colors.text} />
+          )}
+        </Pressable>
       </View>
 
       <View style={styles.goalMidRow}>
@@ -53,6 +57,55 @@ function GoalCard({ title, target, currentLabel, progress, accent, iconName, ico
 
 export function HabitLogScreen() {
   const { colors } = useTheme();
+  const [activityTimer, setActivityTimer] = useState(0);
+  const [activityActive, setActivityActive] = useState(false);
+  const [sleepTimer, setSleepTimer] = useState(0);
+  const [sleepActive, setSleepActive] = useState(false);
+  const [showClock, setShowClock] = useState(false);
+
+  // Activity timer effect
+  useEffect(() => {
+    let interval;
+    if (activityActive) {
+      interval = setInterval(() => {
+        setActivityTimer(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [activityActive]);
+
+  // Sleep timer effect
+  useEffect(() => {
+    let interval;
+    if (sleepActive) {
+      interval = setInterval(() => {
+        setSleepTimer(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [sleepActive]);
+
+  const formatClock = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleActivityToggle = () => {
+    setActivityActive((prev) => {
+      const next = !prev;
+      setShowClock(next);
+      return next;
+    });
+  };
+
+  const handleSleepToggle = () => {
+    setSleepActive(!sleepActive);
+  };
+
+  const activityDisplay = activityTimer > 0 ? `${Math.floor(activityTimer / 60)} min` : 'Current: 30 min';
+  const sleepDisplay = sleepTimer > 0 ? formatClock(sleepTimer) : 'Current: 7h 20m';
 
   return (
     <ScrollView
@@ -90,20 +143,26 @@ export function HabitLogScreen() {
       <GoalCard
         title="Physical Activity"
         target="45 min"
-        currentLabel="Current: 30 min"
+        currentLabel={activityDisplay}
         progress={0.66}
         accent={colors.blue}
         iconName="walk-outline"
         iconBg={colors.primarySoft}
+        onAddPress={handleActivityToggle}
+        isTimer={true}
+        timerActive={activityActive}
       />
       <GoalCard
         title="Sleep"
         target="8h 00m"
-        currentLabel="Current: 7h 20m"
+        currentLabel={sleepDisplay}
         progress={0.92}
         accent={colors.purple}
         iconName="moon-outline"
         iconBg={colors.insightBg}
+        onAddPress={handleSleepToggle}
+        isTimer={true}
+        timerActive={sleepActive}
       />
 
       <Card style={{ marginTop: 16, backgroundColor: colors.insightBg, borderColor: 'transparent' }}>
@@ -117,6 +176,26 @@ export function HabitLogScreen() {
           </View>
         </View>
       </Card>
+      <Modal visible={showClock} transparent animationType="slide">
+        <View style={styles.clockOverlay}>
+          <View style={[styles.clockCard, { backgroundColor: colors.background, shadowColor: colors.shadow }]}>
+            <Text style={[styles.clockTitle, { color: colors.text }]}>Activity Clock</Text>
+            <Text style={[styles.clockTime, { color: colors.text }]}>{formatClock(activityTimer)}</Text>
+            <Pressable
+              onPress={() => {
+                if (activityActive) {
+                  handleActivityToggle();
+                }
+                setShowClock(false);
+              }}
+              style={styles.clockClose}
+            >
+              <Ionicons name="pause" size={22} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Pause</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -151,5 +230,34 @@ const styles = StyleSheet.create({
   goalPct: { fontSize: 12, fontWeight: '800' },
   insightTitle: { fontSize: 16, fontWeight: '900' },
   insightText: { marginTop: 8, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  clockOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  clockCard: {
+    width: '85%',
+    padding: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+    gap: 16,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 16,
+  },
+  clockTitle: { fontSize: 20, fontWeight: '900' },
+  clockTime: { fontSize: 46, fontWeight: '900' },
+  clockClose: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#5A6CFF',
+  },
 });
 

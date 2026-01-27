@@ -9,6 +9,8 @@ import { HabitLogScreen } from '../screens/HabitLogScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SymptomCheckerScreen } from '../screens/SymptomCheckerScreen';
+import { LoginScreen } from '../screens/LoginScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -141,6 +143,7 @@ export function RootNavigator() {
   const { colors } = useTheme();
   return (
     <Stack.Navigator
+      initialRouteName="Login"
       screenOptions={{
         headerShadowVisible: false,
         headerStyle: { backgroundColor: colors.background },
@@ -148,6 +151,15 @@ export function RootNavigator() {
         headerTitleStyle: { fontWeight: '700' },
       }}
     >
+      <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          title: 'Create an account',
+          headerRight: () => <ThemeToggleButton />,
+        }}
+      />
       <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
       <Stack.Screen
         name="SymptomChecker"
