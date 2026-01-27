@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card, IconCircle, ProgressBar } from '../components/ui';
@@ -62,6 +62,13 @@ export function HabitLogScreen() {
   const [sleepTimer, setSleepTimer] = useState(0);
   const [sleepActive, setSleepActive] = useState(false);
   const [showClock, setShowClock] = useState(false);
+  
+  // Nutrition states
+  const [currentCalories, setCurrentCalories] = useState(1450);
+  const [showNutritionModal, setShowNutritionModal] = useState(false);
+  const [foodName, setFoodName] = useState('');
+  const [foodWeight, setFoodWeight] = useState('');
+  const [loadingCalories, setLoadingCalories] = useState(false);
 
   // Activity timer effect
   useEffect(() => {
@@ -104,8 +111,66 @@ export function HabitLogScreen() {
     setSleepActive(!sleepActive);
   };
 
+  const handleNutritionAdd = () => {
+    setShowNutritionModal(true);
+    setFoodName('');
+    setFoodWeight('');
+  };
+
+  const handleAddFood = async () => {
+    if (!foodName.trim()) {
+      Alert.alert('Missing Information', 'Please enter the food name.');
+      return;
+    }
+    if (!foodWeight.trim() || isNaN(parseFloat(foodWeight))) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight in grams.');
+      return;
+    }
+
+    setLoadingCalories(true);
+    try {
+      const response = await fetch('https://health-backend-az5j.onrender.com/api/getCalories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ food: foodName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch calorie information');
+      }
+
+      // Calculate calories consumed based on weight
+      const caloriesPer100g = data.calories_per_100g;
+      const weight = parseFloat(foodWeight);
+      const caloriesConsumed = Math.round((caloriesPer100g * weight) / 100);
+
+      // Update current calories
+      setCurrentCalories(prev => prev + caloriesConsumed);
+
+      Alert.alert(
+        'Food Added!',
+        `${foodName}: ${caloriesConsumed} kcal added\n(${caloriesPer100g} kcal per 100g × ${weight}g)`
+      );
+
+      setShowNutritionModal(false);
+      setFoodName('');
+      setFoodWeight('');
+    } catch (err) {
+      console.error('Error:', err);
+      Alert.alert('Error', err.message || 'Failed to get calorie information. Please try again.');
+    } finally {
+      setLoadingCalories(false);
+    }
+  };
+
   const activityDisplay = activityTimer > 0 ? `${Math.floor(activityTimer / 60)} min` : 'Current: 30 min';
   const sleepDisplay = sleepTimer > 0 ? formatClock(sleepTimer) : 'Current: 7h 20m';
+  const nutritionDisplay = `Current: ${currentCalories.toLocaleString()} kcal`;
+  const nutritionProgress = currentCalories / 2100;
 
   return (
     <ScrollView
@@ -134,11 +199,12 @@ export function HabitLogScreen() {
       <GoalCard
         title="Nutrition"
         target="2,100 kcal"
-        currentLabel="Current: 1,450 kcal"
-        progress={0.69}
+        currentLabel={nutritionDisplay}
+        progress={nutritionProgress}
         accent={colors.orange}
         iconName="restaurant-outline"
         iconBg={colors.warningSoft}
+        onAddPress={handleNutritionAdd}
       />
       <GoalCard
         title="Physical Activity"
@@ -193,6 +259,73 @@ export function HabitLogScreen() {
               <Ionicons name="pause" size={22} color="#fff" />
               <Text style={{ color: '#fff', fontWeight: '700' }}>Pause</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showNutritionModal} transparent animationType="slide">
+        <View style={styles.clockOverlay}>
+          <View style={[styles.nutritionCard, { backgroundColor: colors.background, shadowColor: colors.shadow }]}>
+            <Text style={[styles.clockTitle, { color: colors.text }]}>Add Food</Text>
+            
+            <View style={{ width: '100%', gap: 12 }}>
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.mutedText }]}>Food Name</Text>
+                <TextInput
+                  value={foodName}
+                  onChangeText={setFoodName}
+                  placeholder="e.g., Chapati, Rice, Apple"
+                  placeholderTextColor={colors.mutedText}
+                  style={[styles.nutritionInput, { 
+                    backgroundColor: colors.surface, 
+                    borderColor: colors.border, 
+                    color: colors.text 
+                  }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.mutedText }]}>Weight (grams)</Text>
+                <TextInput
+                  value={foodWeight}
+                  onChangeText={setFoodWeight}
+                  placeholder="e.g., 100"
+                  placeholderTextColor={colors.mutedText}
+                  keyboardType="numeric"
+                  style={[styles.nutritionInput, { 
+                    backgroundColor: colors.surface, 
+                    borderColor: colors.border, 
+                    color: colors.text 
+                  }]}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 }}>
+              <Pressable
+                onPress={() => {
+                  setShowNutritionModal(false);
+                  setFoodName('');
+                  setFoodWeight('');
+                }}
+                style={[styles.nutritionButton, { backgroundColor: colors.surface, borderColor: colors.border, flex: 1 }]}
+                disabled={loadingCalories}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>Cancel</Text>
+              </Pressable>
+              
+              <Pressable
+                onPress={handleAddFood}
+                style={[styles.nutritionButton, { backgroundColor: colors.orange, borderColor: 'transparent', flex: 1 }]}
+                disabled={loadingCalories}
+              >
+                {loadingCalories ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Add Food</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -258,6 +391,37 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     backgroundColor: '#5A6CFF',
+  },
+  nutritionCard: {
+    width: '85%',
+    padding: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+    gap: 16,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  nutritionInput: {
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  nutritionButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
 });
 
