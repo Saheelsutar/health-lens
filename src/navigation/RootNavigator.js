@@ -42,7 +42,7 @@ function ThemeToggleButton() {
 function PlusTabButton({ onPress }) {
   const { colors } = useTheme();
   return (
-    <Pressable onPress={onPress} hitSlop={10} style={{ flex: 1, alignItems: 'center' }}>
+    <Pressable onPress={onPress} hitSlop={10} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <View
         style={{
           width: 58,
@@ -61,7 +61,7 @@ function PlusTabButton({ onPress }) {
           borderColor: colors.background,
         }}
       >
-        <Ionicons name="add" size={30} color="#FFFFFF" />
+        <Ionicons name="add" size={30} color="#FFFFFF" style={{ marginTop: 0, marginLeft: 0 }} />
       </View>
     </Pressable>
   );
@@ -112,22 +112,6 @@ function Tabs() {
           title: 'Steps',
           tabBarIcon: ({ color, size }) => <Ionicons name="walk-outline" color={color} size={size} />,
         }}
-      />
-
-      <Tab.Screen
-        name="Plus"
-        component={EmptyScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: () => null,
-          tabBarButton: (props) => <PlusTabButton {...props} />,
-        }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.getParent()?.navigate('SymptomChecker');
-          },
-        })}
       />
 
       <Tab.Screen

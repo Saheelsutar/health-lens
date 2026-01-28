@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useAuth } from '../context/AuthContext';
 import { Card, IconCircle, ProgressBar, SmallButton } from '../components/ui';
 
 function MiniHabitCard({ iconName, iconColor, iconBg, title, subtitle, progress }) {
@@ -21,8 +22,22 @@ function MiniHabitCard({ iconName, iconColor, iconBg, title, subtitle, progress 
   );
 }
 
-export function HomeScreen() {
+export function HomeScreen({ navigation }) {
   const { colors } = useTheme();
+  const { auth } = useAuth();
+
+  // Get user's first name or fallback to 'User'
+  const userName = auth?.user?.name?.split(' ')[0] || 'User';
+  
+  // Get user initials for avatar
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const nameParts = name.trim().split(' ');
+    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+  };
+
+  const userInitials = getInitials(auth?.user?.name);
 
   return (
     <ScrollView
@@ -32,11 +47,13 @@ export function HomeScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={[styles.dateText, { color: colors.mutedText }]}>Monday, June 12</Text>
-          <Text style={[styles.helloText, { color: colors.text }]}>Hello, Alex</Text>
+          <Text style={[styles.helloText, { color: colors.text }]}>Hello, {userName}</Text>
         </View>
 
         <View style={{ position: 'relative' }}>
-          <View style={[styles.avatar, { backgroundColor: colors.border }]} />
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={styles.avatarText}>{userInitials}</Text>
+          </View>
           <View style={styles.badgeDot} />
         </View>
       </View>
@@ -49,8 +66,8 @@ export function HomeScreen() {
 
         <View style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center' }}>
           <SmallButton
-            label="Check Symptoms  →"
-            onPress={() => {}}
+            label="Symptom Checker  →"
+            onPress={() => navigation.navigate('SymptomChecker')}
             style={{ backgroundColor: '#FFFFFF', borderColor: 'transparent', paddingHorizontal: 16, paddingVertical: 10 }}
             textStyle={{ color: colors.primary, fontSize: 13 }}
           />
@@ -123,13 +140,13 @@ export function HomeScreen() {
         </View>
       </Card>
 
-      <Card style={{ marginTop: 12, paddingVertical: 14, paddingHorizontal: 14, backgroundColor: colors.text, borderColor: 'transparent' }}>
+      <Card style={{ marginTop: 12, paddingVertical: 14, paddingHorizontal: 14, backgroundColor: colors.surface, borderColor: colors.border }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Medical Reports & Records</Text>
+            <Ionicons name="document-text-outline" size={18} color={colors.text} />
+            <Text style={{ color: colors.text, fontWeight: '800' }}>Medical Reports & Records</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+          <Ionicons name="chevron-forward" size={18} color={colors.text} />
         </View>
       </Card>
     </ScrollView>
@@ -140,7 +157,8 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   dateText: { fontSize: 12, fontWeight: '700' },
   helloText: { fontSize: 26, fontWeight: '900', marginTop: 2 },
-  avatar: { width: 38, height: 38, borderRadius: 19 },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   badgeDot: { position: 'absolute', right: 1, top: 1, width: 9, height: 9, borderRadius: 4.5, backgroundColor: '#FF4D4D' },
   heroCard: {
     marginTop: 16,
