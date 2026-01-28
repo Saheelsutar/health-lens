@@ -9,6 +9,7 @@ import { HabitLogScreen } from '../screens/HabitLogScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SymptomCheckerScreen } from '../screens/SymptomCheckerScreen';
+import { FollowUpQuestionsScreen } from '../screens/FollowUpQuestionsScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import StepCounter from '../screens/StepCounter';
 import { RegisterScreen } from '../screens/RegisterScreen';
@@ -194,6 +195,14 @@ function AppStack() {
         component={SymptomCheckerScreen}
         options={{
           title: 'Symptom Checker',
+          headerRight: () => <ThemeToggleButton />,
+        }}
+      />
+      <Stack.Screen
+        name="FollowUpQuestions"
+        component={FollowUpQuestionsScreen}
+        options={{
+          title: 'Follow-up Questions',
           headerRight: () => <ThemeToggleButton />,
         }}
       />

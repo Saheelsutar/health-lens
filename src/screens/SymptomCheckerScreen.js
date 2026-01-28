@@ -4,60 +4,108 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card, IconCircle } from '../components/ui';
 
-function SymptomRow({ label, iconName, iconColor, iconBg }) {
+function SymptomRow({ label, iconName, iconColor, iconBg, isSelected, onPress }) {
   const { colors } = useTheme();
   return (
-    <Card style={{ paddingVertical: 14, paddingHorizontal: 14, marginTop: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <IconCircle bg={iconBg} size={40}>
-            <Ionicons name={iconName} size={20} color={iconColor} />
-          </IconCircle>
-          <Text style={{ color: colors.text, fontWeight: '800' }}>{label}</Text>
+    <Pressable onPress={onPress}>
+      <Card style={{ 
+        paddingVertical: 14, 
+        paddingHorizontal: 14, 
+        marginTop: 12,
+        borderWidth: isSelected ? 2 : 0,
+        borderColor: isSelected ? colors.primary : 'transparent',
+        backgroundColor: isSelected ? colors.primarySoft : colors.surface
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <IconCircle bg={iconBg} size={40}>
+              <Ionicons name={iconName} size={20} color={iconColor} />
+            </IconCircle>
+            <Text style={{ color: colors.text, fontWeight: '800' }}>{label}</Text>
+          </View>
+          <Ionicons 
+            name={isSelected ? "checkmark-circle" : "add"} 
+            size={20} 
+            color={isSelected ? colors.primary : colors.text} 
+          />
         </View>
-        <Ionicons name="add" size={20} color={colors.text} />
-      </View>
-    </Card>
+      </Card>
+    </Pressable>
   );
 }
 
-export function SymptomCheckerScreen() {
+export function SymptomCheckerScreen({ navigation }) {
   const { colors } = useTheme();
-  const [symptomsText, setSymptomsText] = useState('');
+  const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [definitions, setDefinitions] = useState(null);
+  const [followUpQuestions, setFollowUpQuestions] = useState(null);
+  const [answers, setAnswers] = useState({});
   const [error, setError] = useState('');
 
+  const toggleSymptom = (symptom) => {
+    setSelectedSymptoms(prev => {
+      if (prev.includes(symptom)) {
+        return prev.filter(s => s !== symptom);
+      } else {
+        return [...prev, symptom];
+      }
+    });
+  };
+
   const analyzeSymptoms = async () => {
-    if (!symptomsText.trim()) {
-      setError('Please enter your symptoms');
+    if (selectedSymptoms.length === 0) {
+      setError('Please select at least one symptom');
       return;
     }
 
     setLoading(true);
     setError('');
-    setResult(null);
+    setDefinitions(null);
+    setFollowUpQuestions(null);
+    setAnswers({});
 
     try {
-      const response = await fetch('https://health-backend-az5j.onrender.com/api/symptom-check', {
+      // First API call - Get WHO symptom definitions
+      const response1 = await fetch('https://health-backend-az5j.onrender.com/api/whoSymptoms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ symptomsText }),
+        body: JSON.stringify({ symptoms: selectedSymptoms }),
       });
 
-      const data = await response.json();
+      const data1 = await response1.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze symptoms');
+      if (!response1.ok) {
+        throw new Error(data1.error || 'Failed to fetch symptom definitions');
       }
 
-      if (data.success) {
-        setResult(data.data);
-      } else {
-        setError('Analysis failed');
+      setDefinitions(data1.definitions);
+
+      // Second API call - Get follow-up questions
+      const response2 = await fetch('https://health-backend-az5j.onrender.com/api/whoSymptoms/followUP/Qs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ definitions: data1.definitions }),
+      });
+
+      const data2 = await response2.json();
+
+      if (!response2.ok) {
+        throw new Error(data2.error || 'Failed to fetch follow-up questions');
       }
+
+      setFollowUpQuestions(data2.followUpQuestions);
+
+      // Navigate to follow-up questions screen
+      navigation.navigate('FollowUpQuestions', {
+        followUpQuestions: data2.followUpQuestions,
+        definitions: data1.definitions,
+        selectedSymptoms: selectedSymptoms,
+      });
     } catch (err) {
       console.error('Error:', err);
       setError(err.message || 'Network error. Please check if the server is running.');
@@ -70,24 +118,23 @@ export function SymptomCheckerScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ padding: 18, paddingBottom: 28 }}
-      keyboardShouldPersistTaps={true}
+      keyboardShouldPersistTaps="always"
     >
       <Text style={[styles.title, { color: colors.text }]}>What are your symptoms?</Text>
       <Text style={[styles.sub, { color: colors.mutedText }]}>
-        Enter what you're feeling and we'll match it with our verified symptom database.
+        Select one or more symptoms from the list below that match what you're experiencing.
       </Text>
 
-      <View style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="search-outline" size={18} color={colors.mutedText} />
-        <TextInput
-          placeholder="Search symptoms (e.g. Headache)"
-          placeholderTextColor={colors.mutedText}
-          style={[styles.searchInput, { color: colors.text }]}
-          value={symptomsText}
-          onChangeText={setSymptomsText}
-          multiline
-        />
-      </View>
+      {selectedSymptoms.length > 0 && (
+        <Card style={{ marginTop: 14, backgroundColor: colors.primarySoft, borderColor: 'transparent' }}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Ionicons name="checkbox-outline" size={20} color={colors.primary} />
+            <Text style={[styles.info, { color: colors.primary }]}>
+              {selectedSymptoms.length} symptom{selectedSymptoms.length > 1 ? 's' : ''} selected
+            </Text>
+          </View>
+        </Card>
+      )}
 
       {error ? (
         <Card style={{ marginTop: 14, backgroundColor: colors.warningSoft, borderColor: 'transparent' }}>
@@ -98,78 +145,106 @@ export function SymptomCheckerScreen() {
         </Card>
       ) : null}
 
-      {result ? (
+      {definitions && (
         <View style={{ marginTop: 20 }}>
           <Card style={{ backgroundColor: colors.surface }}>
-            <Text style={[styles.resultTitle, { color: colors.text }]}>Analysis Results</Text>
+            <Text style={[styles.resultTitle, { color: colors.text }]}>WHO ICD-11 Definitions</Text>
             
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: colors.mutedText }]}>SYMPTOMS DETECTED</Text>
-              {result.extractedSymptoms.map((symptom, i) => (
-                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
-                  <Text style={[styles.listItem, { color: colors.text }]}>{symptom}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: colors.mutedText }]}>SEVERITY</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <IconCircle bg={result.severity.includes('Severe') ? colors.warningSoft : colors.primarySoft} size={32}>
-                  <Ionicons 
-                    name={result.severity.includes('Severe') ? "alert-circle" : "information-circle"} 
-                    size={16} 
-                    color={result.severity.includes('Severe') ? colors.orange : colors.primary} 
-                  />
-                </IconCircle>
-                <Text style={[styles.listItem, { color: colors.text, fontWeight: '700' }]}>{result.severity}</Text>
+            {definitions.map((def, i) => (
+              <View key={i} style={{ marginTop: 16, paddingTop: i > 0 ? 16 : 0, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: colors.border }}>
+                <Text style={[styles.label, { color: colors.mutedText }]}>{def.symptom.toUpperCase()}</Text>
+                <Text style={[styles.listItem, { color: colors.text, marginTop: 6 }]}>{def.definition}</Text>
+                <Text style={[styles.whoId, { color: colors.mutedText, marginTop: 4 }]}>WHO ID: {def.whoId}</Text>
               </View>
-            </View>
-
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: colors.mutedText }]}>POSSIBLE CAUSES</Text>
-              {result.possibleCauses.map((cause, i) => (
-                <Text key={i} style={[styles.listItem, { color: colors.text, marginTop: 6 }]}>• {cause}</Text>
-              ))}
-            </View>
-
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: colors.mutedText }]}>RELIEF SUGGESTIONS</Text>
-              {result.reliefSuggestions.map((suggestion, i) => (
-                <Text key={i} style={[styles.listItem, { color: colors.text, marginTop: 6 }]}>• {suggestion}</Text>
-              ))}
-            </View>
-
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: colors.mutedText }]}>WARNING SIGNS</Text>
-              {result.warningSigns.map((sign, i) => (
-                <View key={i} style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-                  <Ionicons name="warning" size={16} color={colors.orange} style={{ marginTop: 2 }} />
-                  <Text style={[styles.listItem, { color: colors.text, flex: 1 }]}>{sign}</Text>
-                </View>
-              ))}
-            </View>
-
-            <Card style={{ marginTop: 16, backgroundColor: colors.infoSoft, borderColor: 'transparent' }}>
-              <Text style={[styles.disclaimer, { color: colors.primary }]}>{result.disclaimer}</Text>
-            </Card>
+            ))}
           </Card>
         </View>
-      ) : null}
+      )}
 
-      <Text style={[styles.section, { color: colors.mutedText }]}>COMMON SYMPTOMS</Text>
 
-      {!result ? (
-        <>
-          <SymptomRow label="Fever" iconName="thermometer-outline" iconColor={colors.blue} iconBg={colors.primarySoft} />
-          <SymptomRow label="Headache" iconName="skull-outline" iconColor={colors.purple} iconBg={colors.insightBg} />
-          <SymptomRow label="Shortness of breath" iconName="leaf-outline" iconColor="#2ECC71" iconBg="#E8FFF2" />
-          <SymptomRow label="Cough" iconName="bug-outline" iconColor={colors.orange} iconBg={colors.warningSoft} />
-          <SymptomRow label="Muscle Aches" iconName="flash-outline" iconColor="#FF4D67" iconBg="#FFE9EA" />
-          <SymptomRow label="Fatigue" iconName="sad-outline" iconColor="#FFB020" iconBg="#FFF4D6" />
-        </>
-      ) : null}
+
+      <Text style={[styles.section, { color: colors.mutedText }]}>SELECT SYMPTOMS</Text>
+
+      <SymptomRow 
+        label="Fever" 
+        iconName="thermometer-outline" 
+        iconColor={colors.blue} 
+        iconBg={colors.primarySoft}
+        isSelected={selectedSymptoms.includes('fever')}
+        onPress={() => toggleSymptom('fever')}
+      />
+      <SymptomRow 
+        label="Sneezing" 
+        iconName="water-outline" 
+        iconColor="#3498DB" 
+        iconBg="#E3F2FD"
+        isSelected={selectedSymptoms.includes('sneezing')}
+        onPress={() => toggleSymptom('sneezing')}
+      />
+      <SymptomRow 
+        label="Headache" 
+        iconName="skull-outline" 
+        iconColor={colors.purple} 
+        iconBg={colors.insightBg}
+        isSelected={selectedSymptoms.includes('headache')}
+        onPress={() => toggleSymptom('headache')}
+      />
+      <SymptomRow 
+        label="Weakness" 
+        iconName="battery-dead-outline" 
+        iconColor="#95A5A6" 
+        iconBg="#ECEFF1"
+        isSelected={selectedSymptoms.includes('weakness')}
+        onPress={() => toggleSymptom('weakness')}
+      />
+      <SymptomRow 
+        label="Weight Loss" 
+        iconName="trending-down-outline" 
+        iconColor="#E74C3C" 
+        iconBg="#FFEBEE"
+        isSelected={selectedSymptoms.includes('weight loss')}
+        onPress={() => toggleSymptom('weight loss')}
+      />
+      <SymptomRow 
+        label="Fatigue" 
+        iconName="sad-outline" 
+        iconColor="#FFB020" 
+        iconBg="#FFF4D6"
+        isSelected={selectedSymptoms.includes('fatigue')}
+        onPress={() => toggleSymptom('fatigue')}
+      />
+      <SymptomRow 
+        label="Sore Throat" 
+        iconName="ice-cream-outline" 
+        iconColor="#E91E63" 
+        iconBg="#FCE4EC"
+        isSelected={selectedSymptoms.includes('sore throat')}
+        onPress={() => toggleSymptom('sore throat')}
+      />
+      <SymptomRow 
+        label="Fainting" 
+        iconName="eye-off-outline" 
+        iconColor="#9C27B0" 
+        iconBg="#F3E5F5"
+        isSelected={selectedSymptoms.includes('fainting')}
+        onPress={() => toggleSymptom('fainting')}
+      />
+      <SymptomRow 
+        label="Itching" 
+        iconName="hand-left-outline" 
+        iconColor="#FF9800" 
+        iconBg="#FFF3E0"
+        isSelected={selectedSymptoms.includes('itching')}
+        onPress={() => toggleSymptom('itching')}
+      />
+      <SymptomRow 
+        label="Joint Pain" 
+        iconName="body-outline" 
+        iconColor="#FF4D67" 
+        iconBg="#FFE9EA"
+        isSelected={selectedSymptoms.includes('joint pain')}
+        onPress={() => toggleSymptom('joint pain')}
+      />
 
       <Card style={{ marginTop: 14, backgroundColor: colors.infoSoft, borderColor: 'transparent' }}>
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -223,5 +298,18 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   listItem: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   disclaimer: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  whoId: { fontSize: 10, lineHeight: 14, fontWeight: '500', fontStyle: 'italic' },
+  questionText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  answerInput: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
 });
 
