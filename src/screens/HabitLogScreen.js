@@ -1,8 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card, IconCircle, ProgressBar } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 function DayPill({ day, date, active }) {
   const { colors } = useTheme();
@@ -19,6 +30,28 @@ function DayPill({ day, date, active }) {
       </View>
     </View>
   );
+}
+const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+function buildLast30Days() {
+  const today = new Date();
+  const timeline = [];
+  const todayKey = today.toISOString().slice(0, 10);
+
+  for (let offset = 29; offset >= 0; offset -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    const key = date.toISOString().slice(0, 10);
+    timeline.push({
+      key,
+      day: DAY_LABELS[date.getDay()],
+      date: date.getDate(),
+      dateObj: new Date(date),
+      isToday: key === todayKey,
+    });
+  }
+
+  return timeline;
 }
 
 function GoalCard({ title, target, currentLabel, progress, accent, iconName, iconBg, onAddPress, isTimer, timerActive }) {
@@ -62,13 +95,16 @@ export function HabitLogScreen() {
   const [sleepTimer, setSleepTimer] = useState(0);
   const [sleepActive, setSleepActive] = useState(false);
   const [showClock, setShowClock] = useState(false);
-  
-  // Nutrition states
+  const [savingLog, setSavingLog] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const dayTimeline = useMemo(() => buildLast30Days(), []);
+  const [selectedDate, setSelectedDate] = useState(() => dayTimeline[dayTimeline.length - 1].key);
   const [currentCalories, setCurrentCalories] = useState(1450);
   const [showNutritionModal, setShowNutritionModal] = useState(false);
   const [foodName, setFoodName] = useState('');
   const [foodWeight, setFoodWeight] = useState('');
   const [loadingCalories, setLoadingCalories] = useState(false);
+  const { auth } = useAuth();
 
   // Activity timer effect
   useEffect(() => {
@@ -110,14 +146,12 @@ export function HabitLogScreen() {
   const handleSleepToggle = () => {
     setSleepActive(!sleepActive);
   };
-
   const handleNutritionAdd = () => {
     setShowNutritionModal(true);
     setFoodName('');
     setFoodWeight('');
   };
-
-  const handleAddFood = async () => {
+ const handleAddFood = async () => {
     if (!foodName.trim()) {
       Alert.alert('Missing Information', 'Please enter the food name.');
       return;
@@ -167,10 +201,134 @@ export function HabitLogScreen() {
     }
   };
 
-  const activityDisplay = activityTimer > 0 ? `${Math.floor(activityTimer / 60)} min` : 'Current: 30 min';
-  const sleepDisplay = sleepTimer > 0 ? formatClock(sleepTimer) : 'Current: 7h 20m';
-  const nutritionDisplay = `Current: ${currentCalories.toLocaleString()} kcal`;
-  const nutritionProgress = currentCalories / 2100;
+
+  const activityRecordedMinutes = Math.round(activityTimer / 60);
+  const sleepRecordedMinutes = Math.round(sleepTimer / 60);
+  const ACTIVITY_TARGET_MINUTES = 45;
+  const SLEEP_TARGET_MINUTES = 8 * 60;
+  const LOG_ENDPOINT = 'https://health-backend-az5j.onrender.com/api/goals/log';
+  const todayKey = dayTimeline[dayTimeline.length - 1].key;
+  const selectedLog = logs.find((entry) => entry.date === selectedDate);
+  const todayLog = logs.find((entry) => entry.date === todayKey);
+  const todayActivityMinutes = todayLog?.activityMinutes ?? 0;
+  const todaySleepMinutes = todayLog?.sleepMinutes ?? 0;
+  const activityForPost = Math.max(activityRecordedMinutes, todayActivityMinutes);
+  const sleepForPost = Math.max(sleepRecordedMinutes, todaySleepMinutes);
+  const isTodaySelected = selectedDate === todayKey;
+  const activityMinutes = selectedDate === todayKey
+    ? activityForPost
+    : selectedLog?.activityMinutes ?? 0;
+  const sleepMinutes = selectedDate === todayKey
+    ? sleepForPost
+    : selectedLog?.sleepMinutes ?? 0;
+  const todayNutritionCalories = Math.max(currentCalories, todayLog?.nutritionCalories ?? 0);
+  const nutritionCalories = selectedDate === todayKey
+    ? todayNutritionCalories
+    : selectedLog?.nutritionCalories ?? 0;
+  const activityProgress = activityMinutes > 0 ? Math.min(1, activityMinutes / ACTIVITY_TARGET_MINUTES) : 0;
+  const sleepProgress = sleepMinutes > 0 ? Math.min(1, sleepMinutes / SLEEP_TARGET_MINUTES) : 0;
+  const activityDisplay = activityMinutes > 0 ? `${activityMinutes} min` : 'No data logged';
+  const sleepDisplay = sleepMinutes > 0 ? formatClock(sleepMinutes * 60) : 'No data logged';
+  const nutritionDisplay = nutritionCalories > 0 ? `Current: ${nutritionCalories} kcal` : 'No data logged';
+  const nutritionProgress = nutritionCalories > 0 ? Math.min(1, nutritionCalories / 2100) : 0;
+  const saveButtonLabel = isTodaySelected ? "Save today's progress" : 'Select today to save';
+
+  const token = auth?.token;
+
+  useEffect(() => {
+    if (!token) {
+      setLogs([]);
+      return undefined;
+    }
+
+    let isMounted = true;
+    const fetchLogs = async () => {
+      try {
+        const response = await fetch(LOG_ENDPOINT, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error('Unable to load progress');
+        }
+        const data = await response.json();
+        if (!isMounted) return;
+        setLogs(data);
+        const todayEntry = data.find((entry) => entry.date === todayKey);
+        if (todayEntry) {
+          setCurrentCalories(todayEntry.nutritionCalories ?? 1450);
+        }
+      } catch (err) {
+        console.warn('Unable to load daily log', err);
+      }
+    };
+
+    fetchLogs();
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!isTodaySelected || activityActive) return;
+    const requiredSeconds = todayActivityMinutes * 60;
+    setActivityTimer((prev) => (prev < requiredSeconds ? requiredSeconds : prev));
+  }, [isTodaySelected, activityActive, todayActivityMinutes]);
+
+  useEffect(() => {
+    if (!isTodaySelected || sleepActive) return;
+    const requiredSeconds = todaySleepMinutes * 60;
+    setSleepTimer((prev) => (prev < requiredSeconds ? requiredSeconds : prev));
+  }, [isTodaySelected, sleepActive, todaySleepMinutes]);
+
+  const handleLogToday = async () => {
+    if (!auth?.token) {
+      Alert.alert('Sign in required', 'Log in to save your daily goals.');
+      return;
+    }
+
+    if (!isTodaySelected) {
+      Alert.alert('Save unavailable', 'You can only save progress for today.');
+      return;
+    }
+
+    setSavingLog(true);
+    try {
+      const response = await fetch(LOG_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          nutritionCalories: currentCalories,
+          activityMinutes: activityForPost,
+          sleepMinutes: sleepForPost,
+          date: new Date().toISOString(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to log today');
+      }
+      Alert.alert('Success', 'Your daily goals were stored.');
+      const todayKeyUpdate = todayKey;
+      setLogs((prev) => {
+        const filtered = prev.filter((log) => log.date !== todayKeyUpdate);
+        return [...filtered, {
+          date: todayKeyUpdate,
+          nutritionCalories: currentCalories,
+          activityMinutes: activityForPost,
+          sleepMinutes: sleepForPost,
+        }].sort((a, b) => a.date.localeCompare(b.date));
+      });
+    } catch (err) {
+      Alert.alert('Saving failed', err.message);
+    } finally {
+      setSavingLog(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -178,16 +336,29 @@ export function HabitLogScreen() {
       contentContainerStyle={{ padding: 18, paddingBottom: 28 }}
     >
       <Card style={{ paddingVertical: 14 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <DayPill day="MON" date="12" />
-          <DayPill day="TUE" date="13" />
-          <DayPill day="WED" date="14" active />
-          <DayPill day="THU" date="15" />
-          <DayPill day="FRI" date="16" />
-          <DayPill day="SAT" date="17" />
-          <DayPill day="SUN" date="18" />
-        </View>
+        <ScrollView
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.daysScroll}
+        >
+          {dayTimeline.map((dayInfo, index) => {
+            const { key, ...dayProps } = dayInfo;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setSelectedDate(key)}
+                style={[
+                  styles.dayWrapper,
+                  index === dayTimeline.length - 1 && styles.lastDayWrapper,
+                ]}
+              >
+                <DayPill {...dayProps} active={key === selectedDate} />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </Card>
+
 
       <View style={styles.sectionRow}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Goals</Text>
@@ -204,13 +375,13 @@ export function HabitLogScreen() {
         accent={colors.orange}
         iconName="restaurant-outline"
         iconBg={colors.warningSoft}
-        onAddPress={handleNutritionAdd}
+         onAddPress={handleNutritionAdd}
       />
       <GoalCard
         title="Physical Activity"
         target="45 min"
         currentLabel={activityDisplay}
-        progress={0.66}
+        progress={activityProgress}
         accent={colors.blue}
         iconName="walk-outline"
         iconBg={colors.primarySoft}
@@ -222,7 +393,7 @@ export function HabitLogScreen() {
         title="Sleep"
         target="8h 00m"
         currentLabel={sleepDisplay}
-        progress={0.92}
+        progress={sleepProgress}
         accent={colors.purple}
         iconName="moon-outline"
         iconBg={colors.insightBg}
@@ -242,6 +413,27 @@ export function HabitLogScreen() {
           </View>
         </View>
       </Card>
+        <Pressable
+          onPress={handleLogToday}
+          disabled={savingLog || !isTodaySelected}
+          style={({ pressed }) => [
+            styles.actionButton,
+            {
+              marginTop: 16,
+              backgroundColor: colors.primary,
+              opacity: pressed || savingLog ? 0.7 : 1,
+              alignSelf: 'stretch',
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          {savingLog ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={[styles.actionText, { color: '#fff' }]}>{saveButtonLabel}</Text>
+          )}
+        </Pressable>
       <Modal visible={showClock} transparent animationType="slide">
         <View style={styles.clockOverlay}>
           <View style={[styles.clockCard, { backgroundColor: colors.background, shadowColor: colors.shadow }]}>
@@ -262,8 +454,7 @@ export function HabitLogScreen() {
           </View>
         </View>
       </Modal>
-
-      <Modal visible={showNutritionModal} transparent animationType="slide">
+       <Modal visible={showNutritionModal} transparent animationType="slide">
         <View style={styles.clockOverlay}>
           <View style={[styles.nutritionCard, { backgroundColor: colors.background, shadowColor: colors.shadow }]}>
             <Text style={[styles.clockTitle, { color: colors.text }]}>Add Food</Text>
@@ -343,6 +534,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+   nutritionCard: {
+    width: '85%',
+    padding: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+    gap: 16,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  nutritionInput: {
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  nutritionButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  daysScroll: { flexDirection: 'row', paddingHorizontal: 8 },
+  dayWrapper: { marginRight: 10 },
+  lastDayWrapper: { marginRight: 0 },
   dayDate: { fontWeight: '800', fontSize: 14 },
   sectionRow: { marginTop: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 22, fontWeight: '800' },
@@ -392,36 +617,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#5A6CFF',
   },
-  nutritionCard: {
-    width: '85%',
-    padding: 24,
-    borderRadius: 20,
-    alignItems: 'center',
-    gap: 16,
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 14,
-    elevation: 16,
+  actionButton: {
+    height: 48,
+    borderRadius: 16,
+    paddingHorizontal: 22,
   },
-  inputLabel: {
-    fontSize: 12,
+  actionText: {
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: 6,
-  },
-  nutritionInput: {
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  nutritionButton: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
+    color: '#fff',
   },
 });
 

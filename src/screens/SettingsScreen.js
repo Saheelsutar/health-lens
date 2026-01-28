@@ -1,11 +1,20 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 export function SettingsScreen() {
   const { colors, mode, toggleMode } = useTheme();
+  const { setAuth } = useAuth();
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'Do you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => setAuth(null) },
+    ]);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -24,6 +33,14 @@ export function SettingsScreen() {
       <Text style={{ marginTop: 10, color: colors.mutedText, fontWeight: '600' }}>
         UI-only template for now.
       </Text>
+      <Card style={{ marginTop: 12 }}>
+        <Pressable onPress={handleSignOut} style={styles.row}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="log-out-outline" size={18} color={colors.orange} />
+            <Text style={{ color: colors.orange, fontWeight: '800' }}>Sign out</Text>
+          </View>
+        </Pressable>
+      </Card>
     </View>
   );
 }

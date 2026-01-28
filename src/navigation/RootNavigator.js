@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { SymptomCheckerScreen } from '../screens/SymptomCheckerScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
+import { useAuth } from '../context/AuthContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -139,18 +140,28 @@ function Tabs() {
   );
 }
 
-export function RootNavigator() {
+const stackScreenOptions = (colors) => ({
+  headerShadowVisible: false,
+  headerStyle: { backgroundColor: colors.background },
+  headerTintColor: colors.text,
+  headerTitleStyle: { fontWeight: '700' },
+});
+
+function LoadingScreen() {
   const { colors } = useTheme();
   return (
-    <Stack.Navigator
-      initialRouteName="Login"
-      screenOptions={{
-        headerShadowVisible: false,
-        headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '700' },
-      }}
+    <View
+      style={[styles.loadingContainer, { backgroundColor: colors.background }]}
     >
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
+}
+
+function AuthStack() {
+  const { colors } = useTheme();
+  return (
+    <Stack.Navigator screenOptions={stackScreenOptions(colors)}>
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="Register"
@@ -160,6 +171,14 @@ export function RootNavigator() {
           headerRight: () => <ThemeToggleButton />,
         }}
       />
+    </Stack.Navigator>
+  );
+}
+
+function AppStack() {
+  const { colors } = useTheme();
+  return (
+    <Stack.Navigator screenOptions={stackScreenOptions(colors)}>
       <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
       <Stack.Screen
         name="SymptomChecker"
@@ -172,4 +191,22 @@ export function RootNavigator() {
     </Stack.Navigator>
   );
 }
+
+export function RootNavigator() {
+  const { auth, initializing } = useAuth();
+
+  if (initializing) {
+    return <LoadingScreen />;
+  }
+
+  return auth ? <AppStack /> : <AuthStack />;
+}
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 

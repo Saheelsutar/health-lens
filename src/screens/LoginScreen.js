@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, 
-  Alert, 
-  Pressable, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  View, 
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { Card } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 const AUTH_API = 'https://health-backend-az5j.onrender.com/api/auth';
 
@@ -18,6 +19,7 @@ export function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { setAuth } = useAuth();
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -36,7 +38,7 @@ export function LoginScreen({ navigation }) {
       if (!response.ok) {
         throw new Error(data.message || 'Unable to log in');
       }
-      navigation.replace('Tabs');
+      await setAuth({ user: data.user, token: data.token });
     } catch (err) {
       Alert.alert('Login failed', err.message);
     } finally {
